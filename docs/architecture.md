@@ -13,8 +13,9 @@ Deliver an interactive NASA biosciences atlas that fuses structured knowledge gr
 
 ## Data Flow
 1. **Acquisition**
-   - Load base CSV of 608 publications.
-   - Fetch supplemental metadata via API or offline dumps from OSDR, NSLSL, Task Book.
+ - Load base CSV of 608 publications.
+ - Fetch supplemental metadata via API or offline dumps from OSDR, NSLSL, Task Book.
+  - Authenticate to NASA APIs (e.g., Image and Video Library, APOD) using `NASA_API_KEY` configured in `.env`.
    - Archive raw assets in `data/raw/`.
 2. **Preprocessing**
    - Clean title/abstract text, standardize identifiers, deduplicate experiments.

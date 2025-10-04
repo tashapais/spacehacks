@@ -10,8 +10,13 @@ Interactively explore NASA's space biology experiments through a knowledge graph
 
 ## Quick Start (planned)
 1. Create a virtual environment and install dependencies via `pip install -e .[dev]`.
-2. Place the 608-publication CSV inside `data/raw/nasa_space_biology_publications.csv`.
-3. Run `scripts/bootstrap_demo.py` to build a sample knowledge graph snapshot and cache AI summaries locally.
+2. Copy `.env.example` to `.env` and set `NASA_API_KEY` to your key (or leave as `DEMO_KEY` for limited access).
+3. Place the 608-publication CSV inside `data/raw/nasa_space_biology_publications.csv`.
+4. Run `scripts/bootstrap_demo.py` to build a sample knowledge graph snapshot and cache AI summaries locally.
+
+### NASA API Utilities
+- `scripts/fetch_nasa_data.py apod --date 2024-01-01 --output data/processed/apod.json`
+- `scripts/fetch_nasa_data.py search-images "ISS plant biology" --output data/processed/iss_plants.json`
 
 ## Current Status
 - Architecture blueprint defined in `docs/architecture.md`.
