@@ -20,7 +20,7 @@
 		type="text"
 		bind:value={input}
 		placeholder="Ask about space biology..."
-		class="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+		class="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-black focus:ring-2 focus:ring-blue-500 focus:outline-none"
 	/>
 	<button
 		type="submit"

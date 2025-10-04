@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../app.css';
 	import ChatContainer from '$lib/components/ChatContainer.svelte';
 </script>
 
@@ -6,7 +7,7 @@
 	<!-- Top navigation / branding -->
 	<header class="flex items-center justify-between border-b bg-white px-6 py-3 shadow-sm">
 		<div class="flex items-center gap-2">
-			<img src="/nasa-logo.svg" alt="NASA" class="h-6" />
+			<img src="/nasa-logo.svg" alt="NASA" class="text-md fond-bold h-6 text-black" />
 			<span class="text-sm font-semibold text-gray-700">Bio Studies AI Dashboard</span>
 		</div>
 		<nav class="text-sm text-gray-500">
