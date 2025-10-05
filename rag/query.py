@@ -107,7 +107,7 @@ def call_llm(question: str, context: str, model: str, temperature: float) -> str
     system_prompt = (
         "You are a research assistant answering questions about space biology. "
         "Only answer using the provided context. Include in-text citations using [n] "
-        "where n corresponds to the numbered sources. If the context does not \"
+        "where n corresponds to the numbered sources. If the context does not "
         "contain the answer, respond that the information is not available in the corpus."
     )
 
