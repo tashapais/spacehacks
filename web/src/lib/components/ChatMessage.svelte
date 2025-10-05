@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { marked } from 'marked';
+
   type Citation = {
     id: string;
     title: string;
@@ -11,6 +13,10 @@
     isLoading?: boolean;
     citations?: Citation[];
   };
+
+  $: renderedText = message.role === 'assistant' && !message.isLoading
+    ? marked.parse(message.text, { async: false }) as string
+    : message.text;
 </script>
 
 <div
@@ -19,15 +25,22 @@
   class:justify-start={message.role === 'assistant'}
 >
   <div
-    class="max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-sm leading-relaxed shadow-sm transition-all duration-200"
+    class="max-w-[80%] rounded-2xl px-4 py-2 text-sm leading-relaxed shadow-sm transition-all duration-200"
     class:bg-blue-600={message.role === 'user'}
     class:text-white={message.role === 'user'}
     class:bg-gray-100={message.role === 'assistant'}
     class:text-gray-800={message.role === 'assistant' && !message.isLoading}
     class:text-gray-500={message.role === 'assistant' && message.isLoading}
     class:italic={message.isLoading}
+    class:whitespace-pre-wrap={message.role === 'user' || message.isLoading}
   >
-    <span>{message.text}</span>
+    {#if message.role === 'assistant' && !message.isLoading}
+      <div class="prose prose-sm max-w-none prose-headings:font-bold prose-h1:text-lg prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-1">
+        {@html renderedText}
+      </div>
+    {:else}
+      <span>{message.text}</span>
+    {/if}
 
     {#if message.citations?.length}
       <div class="mt-3 border-t border-gray-200 pt-2 text-xs text-gray-600">

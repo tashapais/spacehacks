@@ -41,6 +41,7 @@
 		]
 	},
 	"dependencies": {
-		"daisyui": "^5.1.27"
+		"daisyui": "^5.1.27",
+		"marked": "^16.3.0"
 	}
 }

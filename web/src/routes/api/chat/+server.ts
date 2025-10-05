@@ -23,11 +23,16 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     ELASTIC_URL,
     ELASTIC_API_KEY,
     ELASTIC_INDEX = 'articles',
-    ELASTIC_MODEL_ID
+    ELASTIC_MODEL_ID,
+    OPENAI_API_KEY
   } = env;
 
   if (!ELASTIC_URL || !ELASTIC_API_KEY || !ELASTIC_MODEL_ID) {
     return json({ error: 'Elasticsearch environment variables are missing' }, { status: 500 });
+  }
+
+  if (!OPENAI_API_KEY) {
+    return json({ error: 'OpenAI API key is missing' }, { status: 500 });
   }
 
   const { messages }: { messages: ChatMessage[] } = await request.json();
@@ -61,8 +66,12 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 
     const citations = formatCitations(hits);
 
-    // Format Elasticsearch results as the answer
-    const answer = formatElasticsearchResults(hits, question);
+    // Use OpenAI to generate a readable answer from the search results
+    const answer = await generateAnswerWithOpenAI(fetch, {
+      apiKey: OPENAI_API_KEY,
+      question,
+      hits
+    });
 
     return json({ answer, citations });
   } catch (error) {
@@ -154,31 +163,62 @@ async function knnRetrieve(
   return data?.hits?.hits ?? [];
 }
 
-function formatElasticsearchResults(hits: any[], question: string): string {
+async function generateAnswerWithOpenAI(
+  fetchFn: typeof fetch,
+  {
+    apiKey,
+    question,
+    hits
+  }: {
+    apiKey: string;
+    question: string;
+    hits: any[];
+  }
+): Promise<string> {
   if (hits.length === 0) {
-    return `No results found in the Elasticsearch index for your question: "${question}"`;
+    return `I couldn't find any relevant information in the knowledge base to answer your question: "${question}"`;
   }
 
-  let result = `Found ${hits.length} relevant documents in Elasticsearch:\n\n`;
+  // Build context from search results
+  const context = hits
+    .map((hit, idx) => {
+      const source = hit?._source ?? {};
+      const title = source.title ?? 'Untitled';
+      const content = (source.content ?? '').slice(0, 1500);
+      return `[${idx + 1}] ${title}\n${content}`;
+    })
+    .join('\n\n---\n\n');
 
-  hits.forEach((hit, idx) => {
-    const source = hit?._source ?? {};
-    const title = source.title ?? 'Untitled';
-    const url = source.url ?? '';
-    const score = hit._score ?? 'N/A';
-    const excerpt = (source.content ?? '')
-      .replace(/\s+/g, ' ')
-      .slice(0, 400);
-
-    result += `**[${idx + 1}] ${title}**\n`;
-    result += `*Relevance score: ${score}*\n`;
-    if (url) {
-      result += `URL: ${url}\n`;
-    }
-    result += `\nExcerpt: ${excerpt}${excerpt.length === 400 ? '...' : ''}\n\n`;
+  const response = await fetchFn('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `Add in text citations like [1], [2], [3], etc. throughout your answer to reference specific sources from the provided context. Be as sepecific as possible.`
+        },
+        {
+          role: 'user',
+          content: `Question: ${question}\n\nContext:\n${context}`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 800
+    })
   });
 
-  return result;
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`OpenAI request failed: ${response.status} ${details}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content ?? 'Unable to generate answer';
 }
 
 function formatCitations(hits: any[]): Citation[] {
