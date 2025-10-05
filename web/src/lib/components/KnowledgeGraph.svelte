@@ -60,15 +60,15 @@
 				'link',
 				forceLink<GraphNode, GraphLink>(links)
 					.id((d) => d.id)
-					.distance(50)
-					.strength((d) => d.similarity * 0.3)
+					.distance(100) // Longer links to spread clusters apart
+					.strength((d) => d.similarity * 0.5) // Stronger link force
 			)
-			.force('charge', forceManyBody().strength(-200))
-			.force('collide', forceCollide().radius(10))
+			.force('charge', forceManyBody().strength(-500)) // Much stronger repulsion
+			.force('collide', forceCollide().radius(12)) // Larger collision radius
 			.force('center', forceCenter(width / 2, height / 2));
 
 		// Run simulation synchronously to get final positions
-		for (let i = 0; i < 300; ++i) simulation.tick();
+		for (let i = 0; i < 500; ++i) simulation.tick(); // More iterations for settling
 
 		// Update nodes with positions
 		nodes = simulation.nodes();

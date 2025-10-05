@@ -214,15 +214,22 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: GraphLink[] } {
-	const nodes: GraphNode[] = articles.map((article) => ({
+	console.log('\n=== GRAPH DATA CREATION ===');
+
+	// Perform k-means clustering on embeddings
+	const NUM_CLUSTERS = 8;
+	const clusters = kMeansClustering(articles, NUM_CLUSTERS);
+
+	const nodes: GraphNode[] = articles.map((article, idx) => ({
 		id: article.id,
 		title: article.title,
-		url: article.url
+		url: article.url,
+		cluster: clusters[idx]
 	}));
 
 	const links: GraphLink[] = [];
-	const SIMILARITY_THRESHOLD = 0.3; // Lower threshold to create more connections
-	const MAX_LINKS_PER_NODE = 15; // Increase connections for better clustering
+	const SIMILARITY_THRESHOLD = 0.7; // Higher threshold for distinct clusters
+	const MAX_LINKS_PER_NODE = 5; // Fewer connections for clearer separation
 
 	// Calculate similarities and create links
 	for (let i = 0; i < articles.length; i++) {
@@ -231,7 +238,8 @@ function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: Grap
 		for (let j = i + 1; j < articles.length; j++) {
 			const similarity = cosineSimilarity(articles[i].embedding, articles[j].embedding);
 
-			if (similarity >= SIMILARITY_THRESHOLD) {
+			// Only connect nodes in the same cluster or with very high similarity
+			if (similarity >= SIMILARITY_THRESHOLD || clusters[i] === clusters[j]) {
 				nodeSimilarities.push({ index: j, similarity });
 			}
 		}
@@ -249,13 +257,88 @@ function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: Grap
 		}
 	}
 
-	// Perform simple clustering based on connectivity
-	const clusters = assignClusters(nodes, links);
-	nodes.forEach((node) => {
-		node.cluster = clusters.get(node.id) ?? 0;
-	});
+	console.log(`Created ${nodes.length} nodes in ${NUM_CLUSTERS} clusters`);
+	console.log(`Created ${links.length} connections`);
+
+	// Print cluster distribution
+	const clusterCounts = new Array(NUM_CLUSTERS).fill(0);
+	clusters.forEach(c => clusterCounts[c]++);
+	console.log('Cluster distribution:', clusterCounts);
+	console.log('============================\n');
 
 	return { nodes, links };
+}
+
+// Simple k-means clustering implementation
+function kMeansClustering(articles: Article[], k: number): number[] {
+	const embeddings = articles.map(a => a.embedding);
+	const dims = embeddings[0].length;
+
+	// Initialize centroids randomly
+	const centroids: number[][] = [];
+	const usedIndices = new Set<number>();
+
+	for (let i = 0; i < k; i++) {
+		let randomIdx;
+		do {
+			randomIdx = Math.floor(Math.random() * embeddings.length);
+		} while (usedIndices.has(randomIdx));
+		usedIndices.add(randomIdx);
+		centroids.push([...embeddings[randomIdx]]);
+	}
+
+	let assignments = new Array(embeddings.length).fill(0);
+	let iterations = 0;
+	const MAX_ITERATIONS = 20;
+
+	while (iterations < MAX_ITERATIONS) {
+		// Assign each point to nearest centroid
+		const newAssignments = embeddings.map(embedding => {
+			let minDist = Infinity;
+			let bestCluster = 0;
+
+			for (let c = 0; c < k; c++) {
+				const dist = euclideanDistance(embedding, centroids[c]);
+				if (dist < minDist) {
+					minDist = dist;
+					bestCluster = c;
+				}
+			}
+
+			return bestCluster;
+		});
+
+		// Check for convergence
+		if (JSON.stringify(newAssignments) === JSON.stringify(assignments)) {
+			break;
+		}
+
+		assignments = newAssignments;
+
+		// Update centroids
+		for (let c = 0; c < k; c++) {
+			const clusterPoints = embeddings.filter((_, idx) => assignments[idx] === c);
+
+			if (clusterPoints.length > 0) {
+				for (let d = 0; d < dims; d++) {
+					centroids[c][d] = clusterPoints.reduce((sum, p) => sum + p[d], 0) / clusterPoints.length;
+				}
+			}
+		}
+
+		iterations++;
+	}
+
+	return assignments;
+}
+
+function euclideanDistance(a: number[], b: number[]): number {
+	let sum = 0;
+	for (let i = 0; i < a.length; i++) {
+		const diff = a[i] - b[i];
+		sum += diff * diff;
+	}
+	return Math.sqrt(sum);
 }
 
 function assignClusters(nodes: GraphNode[], links: GraphLink[]): Map<string, number> {
