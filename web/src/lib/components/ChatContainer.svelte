@@ -1,38 +1,91 @@
 <script lang="ts">
-	import ChatMessage from '$lib/components/ChatMessage.svelte';
-	import ChatInput from '$lib/components/ChatInput.svelte';
+  import ChatMessage from '$lib/components/ChatMessage.svelte';
+  import ChatInput from '$lib/components/ChatInput.svelte';
 
-	interface Message {
-		role: 'user' | 'assistant';
-		text: string;
-	}
+  type Citation = {
+    id: string;
+    title: string;
+    url?: string;
+  };
 
-	let messages: Message[] = [
-		{
-			role: 'assistant',
-			text: 'Welcome to the NASA Bio Studies AI assistant! Ask me about space biology discoveries.'
-		}
-	];
+  type Message = {
+    id: string;
+    role: 'user' | 'assistant';
+    text: string;
+    isLoading?: boolean;
+    citations?: Citation[];
+  };
 
-	const handleSend = (text: string) => {
-		messages = [...messages, { role: 'user', text }];
+  let messageCounter = 0;
 
-		// Placeholder assistant response (mock for now)
-		setTimeout(() => {
-			messages = [
-				...messages,
-				{ role: 'assistant', text: `You asked about "${text}" — let's explore that soon.` }
-			];
-		}, 600);
-	};
+  const makeId = (prefix: string) => `${prefix}-${messageCounter++}`;
+
+  let messages: Message[] = [
+    {
+      id: makeId('assistant'),
+      role: 'assistant',
+      text: 'Welcome to the NASA Bio Studies AI assistant! Ask me about space biology discoveries.'
+    }
+  ];
+
+  const handleSend = async (text: string) => {
+    if (!text.trim()) return;
+
+    const userMessage: Message = { id: makeId('user'), role: 'user', text };
+    const history = [...messages, userMessage];
+    const placeholder: Message = {
+      id: makeId('assistant'),
+      role: 'assistant',
+      text: 'Analyzing your question…',
+      isLoading: true
+    };
+
+    messages = [...history, placeholder];
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messages: history.map(({ role, text }) => ({ role, text })) })
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error ?? 'Chat request failed');
+      }
+
+      messages = [
+        ...history,
+        {
+          id: placeholder.id,
+          role: 'assistant',
+          text: payload.answer,
+          citations: payload.citations
+        }
+      ];
+    } catch (error) {
+      console.error('Chat error', error);
+      messages = [
+        ...history,
+        {
+          id: placeholder.id,
+          role: 'assistant',
+          text: 'I ran into an issue retrieving that answer. Please try again later.'
+        }
+      ];
+    }
+  };
 </script>
 
 <div class="flex h-screen flex-col bg-gray-50">
-	<div class="flex-1 space-y-2 overflow-y-auto px-6 py-4" style="scroll-behavior: smooth;">
-		{#each messages as message (message.text)}
-			<ChatMessage {message} />
-		{/each}
-	</div>
+  <div class="flex-1 space-y-2 overflow-y-auto px-6 py-4" style="scroll-behavior: smooth;">
+    {#each messages as message (message.id)}
+      <ChatMessage {message} />
+    {/each}
+  </div>
 
-	<ChatInput onSend={handleSend} />
+  <ChatInput onSend={handleSend} />
 </div>
