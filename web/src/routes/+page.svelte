@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import ChatContainer from '$lib/components/ChatContainer.svelte';
+	import KnowledgeGraph from '$lib/components/KnowledgeGraph.svelte';
 	import nasaicon from '$lib/assets/nasa-logo.svg';
 </script>
 
@@ -11,10 +12,15 @@
 			<img src={nasaicon} alt="NASA" class="text-md fond-bold h-6 text-black" />
 			<span class="text-sm font-semibold text-gray-700">Bio Studies AI Dashboard</span>
 		</div>
-		<nav class="text-sm text-gray-500">
+		<nav class="flex gap-4 text-sm text-gray-500">
 			<a href="/" class="hover:text-blue-600">Explore</a>
 		</nav>
 	</header>
+
+	<!-- Knowledge Graph -->
+	<div class="h-[400px] border-b">
+		<KnowledgeGraph />
+	</div>
 
 	<!-- Main Chat Content -->
 	<ChatContainer />
