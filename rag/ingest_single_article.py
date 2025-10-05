@@ -52,7 +52,6 @@ if not es.indices.exists(index=INDEX_NAME):
     print(f"✅ Created index '{INDEX_NAME}'")
 else:
     print(f"ℹ️ Using existing index '{INDEX_NAME}'")
-
 # ---------------------------
 # Fetch & parse article
 # ---------------------------
@@ -87,25 +86,6 @@ if not text:
 # ---------------------------
 # Create embedding via inference model
 # ---------------------------
-# inference_path = f"/_inference/text_embedding/{MODEL_ID}"
-# payload = {"input": text[:8000]}  # limit if very long
-#
-# try:
-#     response = es.transport.perform_request(
-#         method="POST",
-#         target=inference_path,                # <-- 'target', not 'path'
-#         body=json.dumps(payload),
-#         headers={"Content-Type": "application/json"},
-#     )
-#
-#     embedding = response.get("predicted_value")
-#     if isinstance(embedding, list) and isinstance(embedding[0], list):
-#         embedding = embedding[0]
-#
-# except Exception as e:
-#     print(f"❌ Failed to get embedding: {e}")
-#     sys.exit(1)
-
 response = es.inference.text_embedding(
     inference_id=MODEL_ID,
     input=text[:8000]          # you can also pass a list of strings
