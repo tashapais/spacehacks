@@ -88,7 +88,8 @@ async function fetchAllArticles(
 			},
 			body: JSON.stringify({
 				size: 603,
-				_source: true, // Get all fields to see what's available
+				_source: ['title', 'url', 'content', 'timestamp'],
+				fields: ['content_vector'], // Explicitly request dense_vector field
 				query: {
 					match_all: {}
 				}
@@ -104,22 +105,60 @@ async function fetchAllArticles(
 	const data = await response.json();
 	const hits = data?.hits?.hits ?? [];
 
-	// Debug: Print first document structure to see all available fields
-	if (hits.length > 0) {
-		console.log('\n=== FIRST DOCUMENT STRUCTURE ===');
-		// console.log('Available fields:', Object.keys(hits[0]._source || {}));
-		// console.log('\nFull first document:');
-		console.log(JSON.stringify(hits[0]));
-		console.log('=================================\n');
-	}
+	// Debug: Print document structures and dense_vector values
+	console.log('\n=== DOCUMENT STRUCTURES ===');
+	console.log(`Showing first 3 documents out of ${hits.length} total:\n`);
 
-	const articles = hits.map((hit: any) => ({
-		id: hit._id,
-		title: hit._source?.title ?? 'Untitled',
-		content: hit._source?.content ?? '',
-		url: hit._source?.url,
-		embedding: hit._source?.content_vector ?? []
-	}));
+	hits.slice(0, 3).forEach((hit: any, index: number) => {
+		console.log(`\n--- Document ${index + 1} ---`);
+		console.log(`ID: ${hit._id}`);
+		console.log(`Available _source fields:`, Object.keys(hit._source || {}));
+		console.log(`Available fields:`, Object.keys(hit.fields || {}));
+
+		// Show dense_vector info
+		const vectorField = hit.fields?.content_vector;
+		console.log(`\nDense Vector Field Type: ${typeof vectorField}`);
+		console.log(`Dense Vector Field Value:`, vectorField);
+
+		if (vectorField) {
+			const vector = Array.isArray(vectorField) ? vectorField[0] : vectorField;
+			console.log(`Vector Type: ${typeof vector}`);
+			console.log(`Is Array: ${Array.isArray(vector)}`);
+
+			if (Array.isArray(vector)) {
+				console.log(`  Length: ${vector.length}`);
+				console.log(`  First 10 values: [${vector.slice(0, 10).join(', ')}]`);
+			} else {
+				console.log(`  Vector is not an array, showing first 100 chars:`, JSON.stringify(vector).slice(0, 100));
+			}
+		} else {
+			console.log(`Dense Vector: NOT FOUND`);
+		}
+
+		// Exclude content field from display
+		const { content, ...sourceWithoutContent } = hit._source || {};
+		const hitWithoutContent = { ...hit, _source: sourceWithoutContent };
+		delete hitWithoutContent.fields?.content_vector; // Don't print full vector
+
+		console.log(`\nDocument structure (content and full vector excluded):`);
+		console.log(JSON.stringify(hitWithoutContent, null, 2));
+		console.log('---\n');
+	});
+	console.log('=================================\n');
+
+	const articles = hits.map((hit: any) => {
+		// The content_vector field itself is the array of numbers
+		const vectorField = hit.fields?.content_vector;
+		const embedding = Array.isArray(vectorField) ? vectorField : [];
+
+		return {
+			id: hit._id,
+			title: hit._source?.title ?? 'Untitled',
+			content: hit._source?.content ?? '',
+			url: hit._source?.url,
+			embedding
+		};
+	});
 
 	// Debug: Print embedding info to console
 	console.log('\n=== ELASTICSEARCH EMBEDDINGS DEBUG ===');
@@ -128,7 +167,13 @@ async function fetchAllArticles(
 	console.log(`  ID: ${articles[0]?.id}`);
 	console.log(`  Title: ${articles[0]?.title}`);
 	console.log(`  Embedding length: ${articles[0]?.embedding?.length}`);
-	console.log(`  Embedding sample (first 10 values): ${articles[0]?.embedding?.slice(0, 10)}`);
+	console.log(`  Embedding sample (first 10 values): [${articles[0]?.embedding?.slice(0, 10).join(', ')}]`);
+
+	console.log(`\nSecond article:`);
+	console.log(`  ID: ${articles[1]?.id}`);
+	console.log(`  Title: ${articles[1]?.title}`);
+	console.log(`  Embedding length: ${articles[1]?.embedding?.length}`);
+	console.log(`  Embedding sample (first 10 values): [${articles[1]?.embedding?.slice(0, 10).join(', ')}]`);
 
 	// Check if embeddings are empty
 	const emptyEmbeddings = articles.filter((a: Article) => !a.embedding || a.embedding.length === 0);
@@ -139,6 +184,13 @@ async function fetchAllArticles(
 			console.log(`  - ${a.title} (ID: ${a.id})`);
 		});
 	}
+
+	// Test cosine similarity between first two articles
+	if (articles.length >= 2 && articles[0].embedding.length > 0 && articles[1].embedding.length > 0) {
+		const similarity = cosineSimilarity(articles[0].embedding, articles[1].embedding);
+		console.log(`\nTest: Cosine similarity between first two articles: ${similarity.toFixed(4)}`);
+	}
+
 	console.log('=====================================\n');
 
 	return articles;
