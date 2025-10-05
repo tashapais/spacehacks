@@ -12,7 +12,8 @@
 			<span class="text-sm font-semibold text-gray-700">Bio Studies AI Dashboard</span>
 		</div>
 		<nav class="text-sm text-gray-500">
-			<a href="/" class="hover:text-blue-600">Explore</a>
+			<a href="/" class="hover:text-blue-600">Chat</a>
+			<a href="/knowledge-graph" class="hover:text-blue-600 ml-4">Knowledge Graph</a>
 		</nav>
 	</header>
 

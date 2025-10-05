@@ -1,6 +1,7 @@
 <script lang="ts">
   import ChatMessage from '$lib/components/ChatMessage.svelte';
   import ChatInput from '$lib/components/ChatInput.svelte';
+  import KnowledgeGraphPreview from '$lib/components/KnowledgeGraphPreview.svelte';
 
   type Citation = {
     id: string;
@@ -27,6 +28,15 @@
       text: 'Welcome to the NASA Bio Studies AI assistant! Ask me about space biology discoveries.'
     }
   ];
+
+  // Extract session context from conversation
+  $: sessionContext = messages
+    .filter(msg => msg.role === 'user')
+    .map(msg => msg.text)
+    .join(' ')
+    .split(/\s+/)
+    .filter(word => word.length > 3) // Only words longer than 3 characters
+    .slice(-20); // Last 20 words to keep context manageable
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
@@ -82,6 +92,7 @@
 
 <div class="flex h-screen flex-col bg-gray-50">
   <div class="flex-1 space-y-2 overflow-y-auto px-6 py-4" style="scroll-behavior: smooth;">
+    <KnowledgeGraphPreview compact={true} {sessionContext} />
     {#each messages as message (message.id)}
       <ChatMessage {message} />
     {/each}
