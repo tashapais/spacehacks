@@ -13,7 +13,7 @@
 	import { interpolateRainbow } from 'd3-scale-chromatic';
 	import { zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
 	import { select } from 'd3-selection';
-	import { highlightedSourceUrls } from '$lib/stores/highlightedSources';
+	import { highlightedSources, type HighlightedSource } from '$lib/stores/highlightedSources';
 
 	interface GraphNode extends SimulationNodeDatum {
 		id: string;
@@ -46,12 +46,12 @@
 	let svgElement = $state<SVGSVGElement | undefined>(undefined);
 	let transform = $state({ x: 0, y: 0, k: 1 });
 	let simulation: Simulation<GraphNode, GraphLink> | null = null;
-	let highlightedUrls = $state<string[]>([]);
+	let highlightedSourcesList = $state<HighlightedSource[]>([]);
 
 	// Subscribe to highlighted sources
 	$effect(() => {
-		const unsubscribe = highlightedSourceUrls.subscribe(urls => {
-			highlightedUrls = urls;
+		const unsubscribe = highlightedSources.subscribe(sources => {
+			highlightedSourcesList = sources;
 		});
 		return unsubscribe;
 	});
@@ -167,7 +167,12 @@
 	}
 
 	function isNodeHighlighted(node: GraphNode): boolean {
-		return highlightedUrls.includes(node.url || '');
+		return highlightedSourcesList.some(s => s.url === node.url);
+	}
+
+	function getCitationNumber(node: GraphNode): number | null {
+		const source = highlightedSourcesList.find(s => s.url === node.url);
+		return source ? source.citationNumber : null;
 	}
 
 	onMount(() => {
@@ -272,11 +277,17 @@
 
 			<!-- Tooltip -->
 			{#if hoveredNode && hoveredNode.x !== undefined && hoveredNode.y !== undefined}
+				{@const citationNum = getCitationNumber(hoveredNode)}
 				<div
 					class="tooltip"
 					style="left: {(hoveredNode.x * transform.k + transform.x)}px; top: {(hoveredNode.y * transform.k + transform.y)}px;"
 				>
-					<div class="tooltip-title">{hoveredNode.title}</div>
+					<div class="tooltip-title">
+						{#if citationNum}
+							<span class="citation-badge">[{citationNum}]</span>
+						{/if}
+						{hoveredNode.title}
+					</div>
 					{#if hoveredNode.authors}
 						<div class="tooltip-authors">{hoveredNode.authors}</div>
 					{/if}
@@ -387,6 +398,16 @@
 	.tooltip-title {
 		font-weight: 600;
 		margin-bottom: 4px;
+		display: flex;
+		align-items: start;
+		gap: 6px;
+	}
+
+	.citation-badge {
+		color: #FFD700;
+		font-weight: 700;
+		flex-shrink: 0;
+		font-size: 0.95em;
 	}
 
 	.tooltip-authors {

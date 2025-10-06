@@ -2,7 +2,7 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import { EXPERTISE_CONFIGS, DEFAULT_EXPERTISE, type ExpertiseLevel } from '$lib/expertise';
-	import { highlightedSourceUrls } from '$lib/stores/highlightedSources';
+	import { highlightedSources } from '$lib/stores/highlightedSources';
 
 	type Citation = {
 		id: string;
@@ -91,8 +91,13 @@
 							);
 							// Update highlighted sources on the graph
 							if (citations && citations.length > 0) {
-								const urls = citations.map((c: Citation) => c.url).filter(Boolean) as string[];
-								highlightedSourceUrls.set(urls);
+								const sourcesWithNumbers = citations
+									.map((c: Citation, index) => ({
+										url: c.url || '',
+										citationNumber: index + 1
+									}))
+									.filter((s) => s.url);
+								highlightedSources.set(sourcesWithNumbers);
 							}
 						} else if (parsed.type === 'chunk') {
 							accumulatedText += parsed.content;

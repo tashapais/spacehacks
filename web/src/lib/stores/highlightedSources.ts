@@ -1,3 +1,8 @@
 import { writable } from 'svelte/store';
 
-export const highlightedSourceUrls = writable<string[]>([]);
+export interface HighlightedSource {
+	url: string;
+	citationNumber: number;
+}
+
+export const highlightedSources = writable<HighlightedSource[]>([]);
