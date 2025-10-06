@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
+	import { EXPERTISE_CONFIGS, DEFAULT_EXPERTISE, type ExpertiseLevel } from '$lib/expertise';
 
 	type Citation = {
 		id: string;
@@ -18,6 +19,7 @@
 	};
 
 	let messageCounter = 0;
+	let selectedExpertise: ExpertiseLevel = DEFAULT_EXPERTISE;
 
 	const makeId = (prefix: string) => `${prefix}-${messageCounter++}`;
 
@@ -49,7 +51,10 @@
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ messages: history.map(({ role, text }) => ({ role, text })) })
+				body: JSON.stringify({
+					messages: history.map(({ role, text }) => ({ role, text })),
+					expertise: selectedExpertise
+				})
 			});
 
 			if (!response.ok) {
@@ -119,6 +124,26 @@
 </script>
 
 <div class="flex h-screen flex-col bg-gray-50">
+	<div class="border-b border-gray-200 bg-white px-6 py-3">
+		<div class="flex items-center gap-3">
+			<label for="expertise" class="text-sm font-semibold text-gray-600">Expertise Level:</label>
+			<select
+				id="expertise"
+				bind:value={selectedExpertise}
+				class="select-bordered select w-auto max-w-xs border-gray-300 bg-white select-sm text-gray-800 focus:border-blue-500 focus:outline-none"
+			>
+				{#each Object.values(EXPERTISE_CONFIGS) as config}
+					<option value={config.id} title={config.description}>
+						{config.name}
+					</option>
+				{/each}
+			</select>
+			<span class="hidden text-xs text-gray-500 italic sm:inline">
+				{EXPERTISE_CONFIGS[selectedExpertise].description}
+			</span>
+		</div>
+	</div>
+
 	<div class="flex-1 space-y-2 overflow-y-auto px-6 py-4" style="scroll-behavior: smooth;">
 		{#each messages as message (message.id)}
 			<ChatMessage {message} />
