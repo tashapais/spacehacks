@@ -1,92 +1,129 @@
 <script lang="ts">
-  import ChatMessage from '$lib/components/ChatMessage.svelte';
-  import ChatInput from '$lib/components/ChatInput.svelte';
+	import ChatMessage from '$lib/components/ChatMessage.svelte';
+	import ChatInput from '$lib/components/ChatInput.svelte';
 
-  type Citation = {
-    id: string;
-    title: string;
-    url?: string;
-    snippet?: string;
-  };
+	type Citation = {
+		id: string;
+		title: string;
+		url?: string;
+		snippet?: string;
+	};
 
-  type Message = {
-    id: string;
-    role: 'user' | 'assistant';
-    text: string;
-    isLoading?: boolean;
-    citations?: Citation[];
-  };
+	type Message = {
+		id: string;
+		role: 'user' | 'assistant';
+		text: string;
+		isLoading?: boolean;
+		citations?: Citation[];
+	};
 
-  let messageCounter = 0;
+	let messageCounter = 0;
 
-  const makeId = (prefix: string) => `${prefix}-${messageCounter++}`;
+	const makeId = (prefix: string) => `${prefix}-${messageCounter++}`;
 
-  let messages: Message[] = [
-    {
-      id: makeId('assistant'),
-      role: 'assistant',
-      text: 'Welcome to the NASA Bio Studies AI assistant! Ask me about space biology discoveries.'
-    }
-  ];
+	let messages: Message[] = [
+		{
+			id: makeId('assistant'),
+			role: 'assistant',
+			text: 'Welcome to the NASA Bio Studies AI assistant! Ask me about space biology discoveries.'
+		}
+	];
 
-  const handleSend = async (text: string) => {
-    if (!text.trim()) return;
+	const handleSend = async (text: string) => {
+		if (!text.trim()) return;
 
-    const userMessage: Message = { id: makeId('user'), role: 'user', text };
-    const history = [...messages, userMessage];
-    const placeholder: Message = {
-      id: makeId('assistant'),
-      role: 'assistant',
-      text: 'Analyzing your question…',
-      isLoading: true
-    };
+		const userMessage: Message = { id: makeId('user'), role: 'user', text };
+		const history = [...messages, userMessage];
+		const placeholder: Message = {
+			id: makeId('assistant'),
+			role: 'assistant',
+			text: 'Analyzing your question…',
+			isLoading: true
+		};
 
-    messages = [...history, placeholder];
+		messages = [...history, placeholder];
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ messages: history.map(({ role, text }) => ({ role, text })) })
-      });
+		try {
+			const response = await fetch('/api/chat', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ messages: history.map(({ role, text }) => ({ role, text })) })
+			});
 
-      const payload = await response.json();
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error ?? 'Chat request failed');
+			}
 
-      if (!response.ok || payload.error) {
-        throw new Error(payload.error ?? 'Chat request failed');
-      }
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+			let accumulatedText = '';
+			let citations: Citation[] | undefined;
 
-      messages = [
-        ...history,
-        {
-          id: placeholder.id,
-          role: 'assistant',
-          text: payload.answer,
-          citations: payload.citations
-        }
-      ];
-    } catch (error) {
-      console.error('Chat error', error);
-      messages = [
-        ...history,
-        {
-          id: placeholder.id,
-          role: 'assistant',
-          text: 'I ran into an issue retrieving that answer. Please try again later.'
-        }
-      ];
-    }
-  };
+			while (true) {
+				const { done, value } = await reader!.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value);
+				const lines = chunk.split('\n');
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						const data = line.slice(6);
+						if (!data.trim()) continue;
+
+						try {
+							const parsed = JSON.parse(data);
+
+							if (parsed.type === 'citations') {
+								citations = parsed.citations;
+								// Update message with citations
+								messages = messages.map((msg) =>
+									msg.id === placeholder.id ? { ...msg, citations } : msg
+								);
+							} else if (parsed.type === 'chunk') {
+								accumulatedText += parsed.content;
+								// Update message with accumulated text
+								messages = messages.map((msg) =>
+									msg.id === placeholder.id
+										? { ...msg, text: accumulatedText, isLoading: false }
+										: msg
+								);
+							} else if (parsed.type === 'done') {
+								// Stream completed successfully
+								break;
+							} else if (parsed.type === 'error') {
+								throw new Error(parsed.error);
+							}
+						} catch (e) {
+							console.warn('Failed to parse SSE data:', data);
+							continue;
+						}
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Chat error', error);
+			messages = [
+				...history,
+				{
+					id: placeholder.id,
+					role: 'assistant',
+					text: 'I ran into an issue retrieving that answer. Please try again later.'
+				}
+			];
+		}
+	};
 </script>
 
 <div class="flex h-screen flex-col bg-gray-50">
-  <div class="flex-1 space-y-2 overflow-y-auto px-6 py-4" style="scroll-behavior: smooth;">
-    {#each messages as message (message.id)}
-      <ChatMessage {message} />
-    {/each}
-  </div>
+	<div class="flex-1 space-y-2 overflow-y-auto px-6 py-4" style="scroll-behavior: smooth;">
+		{#each messages as message (message.id)}
+			<ChatMessage {message} />
+		{/each}
+	</div>
 
-  <ChatInput onSend={handleSend} />
+	<ChatInput onSend={handleSend} />
 </div>
