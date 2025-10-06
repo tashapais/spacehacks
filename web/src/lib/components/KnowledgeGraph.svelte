@@ -13,6 +13,7 @@
 	import { interpolateRainbow } from 'd3-scale-chromatic';
 	import { zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
 	import { select } from 'd3-selection';
+	import { highlightedSourceUrls } from '$lib/stores/highlightedSources';
 
 	interface GraphNode extends SimulationNodeDatum {
 		id: string;
@@ -45,6 +46,15 @@
 	let svgElement = $state<SVGSVGElement | undefined>(undefined);
 	let transform = $state({ x: 0, y: 0, k: 1 });
 	let simulation: Simulation<GraphNode, GraphLink> | null = null;
+	let highlightedUrls = $state<string[]>([]);
+
+	// Subscribe to highlighted sources
+	$effect(() => {
+		const unsubscribe = highlightedSourceUrls.subscribe(urls => {
+			highlightedUrls = urls;
+		});
+		return unsubscribe;
+	});
 
 	async function fetchGraphData() {
 		try {
@@ -156,6 +166,10 @@
 		}
 	}
 
+	function isNodeHighlighted(node: GraphNode): boolean {
+		return highlightedUrls.includes(node.url || '');
+	}
+
 	onMount(() => {
 		fetchGraphData();
 
@@ -211,19 +225,46 @@
 					<!-- Nodes -->
 					<g class="nodes">
 						{#each nodes as node}
-							<circle
-								cx={node.x}
-								cy={node.y}
-								r={hoveredNode?.id === node.id ? 8 : 6}
-								fill={getNodeColor(node.cluster)}
-								stroke="#ffffff"
-								stroke-width="1.5"
-								opacity={hoveredNode && hoveredNode.id !== node.id ? 0.3 : 1}
-								onmouseenter={() => handleNodeHover(node)}
-								onmouseleave={() => handleNodeHover(null)}
-								onclick={() => handleNodeClick(node)}
-								class="node-circle"
-							/>
+							{#if isNodeHighlighted(node)}
+								<!-- Highlighted node with glow effect -->
+								<circle
+									cx={node.x}
+									cy={node.y}
+									r={18}
+									fill="none"
+									stroke="#FFD700"
+									stroke-width="6"
+									opacity="0.5"
+									class="node-glow"
+								/>
+								<circle
+									cx={node.x}
+									cy={node.y}
+									r={10}
+									fill={getNodeColor(node.cluster)}
+									stroke="#FFD700"
+									stroke-width="4"
+									opacity="1"
+									onmouseenter={() => handleNodeHover(node)}
+									onmouseleave={() => handleNodeHover(null)}
+									onclick={() => handleNodeClick(node)}
+									class="node-circle highlighted"
+								/>
+							{:else}
+								<circle
+									cx={node.x}
+									cy={node.y}
+									r={hoveredNode?.id === node.id ? 8 : 6}
+									fill={getNodeColor(node.cluster)}
+									stroke="#ffffff"
+									stroke-width="1.5"
+									opacity={hoveredNode && hoveredNode.id !== node.id ? 0.3 : 1}
+									onmouseenter={() => handleNodeHover(node)}
+									onmouseleave={() => handleNodeHover(null)}
+									onclick={() => handleNodeClick(node)}
+									class="node-circle"
+								/>
+							{/if}
 						{/each}
 					</g>
 				</g>
@@ -308,6 +349,25 @@
 
 	.node-circle:hover {
 		filter: brightness(1.2);
+	}
+
+	.node-circle.highlighted {
+		filter: brightness(1.3);
+	}
+
+	.node-glow {
+		animation: pulse 2s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			opacity: 0.3;
+			stroke-width: 6;
+		}
+		50% {
+			opacity: 0.7;
+			stroke-width: 8;
+		}
 	}
 
 	.tooltip {

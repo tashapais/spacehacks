@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
+	import { highlightedSourceUrls } from '$lib/stores/highlightedSources';
 
 	type Citation = {
 		id: string;
@@ -59,63 +60,68 @@
 
 			const reader = response.body?.getReader();
 			const decoder = new TextDecoder();
-			let accumulatedText = '';
-			let citations: Citation[] | undefined;
+		let accumulatedText = '';
+		let citations: Citation[] | undefined;
 
-			while (true) {
-				const { done, value } = await reader!.read();
-				if (done) break;
+		while (true) {
+			const { done, value } = await reader!.read();
+			if (done) break;
 
-				const chunk = decoder.decode(value);
-				const lines = chunk.split('\n');
+			const chunk = decoder.decode(value);
+			const lines = chunk.split('\n');
 
-				for (const line of lines) {
-					if (line.startsWith('data: ')) {
-						const data = line.slice(6);
-						if (!data.trim()) continue;
+			for (const line of lines) {
+				if (line.startsWith('data: ')) {
+					const data = line.slice(6);
+					if (!data.trim()) continue;
 
-						try {
-							const parsed = JSON.parse(data);
+					try {
+						const parsed = JSON.parse(data);
 
-							if (parsed.type === 'citations') {
-								citations = parsed.citations;
-								// Update message with citations
-								messages = messages.map((msg) =>
-									msg.id === placeholder.id ? { ...msg, citations } : msg
-								);
-							} else if (parsed.type === 'chunk') {
-								accumulatedText += parsed.content;
-								// Update message with accumulated text
-								messages = messages.map((msg) =>
-									msg.id === placeholder.id
-										? { ...msg, text: accumulatedText, isLoading: false }
-										: msg
-								);
-							} else if (parsed.type === 'done') {
-								// Stream completed successfully
-								break;
-							} else if (parsed.type === 'error') {
-								throw new Error(parsed.error);
+						if (parsed.type === 'citations') {
+							citations = parsed.citations;
+							// Update message with citations
+							messages = messages.map((msg) =>
+								msg.id === placeholder.id ? { ...msg, citations } : msg
+							);
+							// Update highlighted sources on the graph
+							if (citations && citations.length > 0) {
+								const urls = citations.map((c: Citation) => c.url).filter(Boolean) as string[];
+								highlightedSourceUrls.set(urls);
 							}
-						} catch (e) {
-							console.warn('Failed to parse SSE data:', data);
-							continue;
+						} else if (parsed.type === 'chunk') {
+							accumulatedText += parsed.content;
+							// Update message with accumulated text
+							messages = messages.map((msg) =>
+								msg.id === placeholder.id
+									? { ...msg, text: accumulatedText, isLoading: false }
+									: msg
+							);
+						} else if (parsed.type === 'done') {
+							// Stream completed successfully
+							break;
+						} else if (parsed.type === 'error') {
+							throw new Error(parsed.error);
 						}
+					} catch (e) {
+						console.warn('Failed to parse SSE data:', data);
+						continue;
 					}
 				}
 			}
-		} catch (error) {
-			console.error('Chat error', error);
-			messages = [
-				...history,
-				{
-					id: placeholder.id,
-					role: 'assistant',
-					text: 'I ran into an issue retrieving that answer. Please try again later.'
-				}
-			];
 		}
-	};
+	} catch (error) {
+		console.error('Chat error', error);
+		messages = [
+			...history,
+			{
+				id: placeholder.id,
+				role: 'assistant',
+				text: 'I ran into an issue retrieving that answer. Please try again later.'
+			}
+		];
+	}
+};
 </script>
 
 <div class="flex h-screen flex-col bg-gray-50">
