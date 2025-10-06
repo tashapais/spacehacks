@@ -5,7 +5,7 @@ import { Buffer } from 'node:buffer';
 
 const DEFAULT_TOP_K = 4;
 const DEFAULT_NUM_CANDIDATES = 50;
-const MAX_CONTEXT_CHARS = 1200;
+const MAX_CONTEXT_CHARS = 2800;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -16,13 +16,14 @@ interface Citation {
   id: string;
   title: string;
   url?: string;
+  snippet?: string;
 }
 
 export const POST: RequestHandler = async ({ request, fetch }) => {
   const {
     ELASTIC_URL,
     ELASTIC_API_KEY,
-    ELASTIC_INDEX = 'articles',
+    ELASTIC_INDEX = 'articles_v2',
     ELASTIC_MODEL_ID,
     OPENAI_API_KEY
   } = env;
@@ -55,7 +56,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
       query: question
     });
 
-    const hits = await knnRetrieve(fetch, {
+    const rawHits = await knnRetrieve(fetch, {
       elasticUrl: ELASTIC_URL,
       authHeader: elasticAuthHeader,
       index: ELASTIC_INDEX,
@@ -64,9 +65,9 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
       numCandidates: DEFAULT_NUM_CANDIDATES
     });
 
+    const hits = dedupeByArticle(rawHits, DEFAULT_TOP_K);
     const citations = formatCitations(hits);
 
-    // Use OpenAI to generate a readable answer from the search results
     const answer = await generateAnswerWithOpenAI(fetch, {
       apiKey: OPENAI_API_KEY,
       question,
@@ -118,6 +119,21 @@ async function embedQuery(
   throw new Error('Embedding response missing vector');
 }
 
+function dedupeByArticle(hits: any[], limit: number) {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const h of hits) {
+    const a = h?._source?.article_id as string | undefined;
+    const key = a || Math.random().toString();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(h);
+    }
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 async function knnRetrieve(
   fetchFn: typeof fetch,
   {
@@ -142,15 +158,15 @@ async function knnRetrieve(
       'Content-Type': 'application/json',
       Authorization: authHeader
     },
-    body: JSON.stringify({
+      body: JSON.stringify({
       knn: {
         field: 'content_vector',
         query_vector: vector,
         k,
         num_candidates: numCandidates
       },
-      _source: ['title', 'url', 'content'],
-      size: k
+      _source: ['title', 'url', 'content', 'article_id', 'chunk_index', 'n_chars'],
+      size: Math.max(k * 2, k)
     })
   });
 
@@ -180,14 +196,21 @@ async function generateAnswerWithOpenAI(
   }
 
   // Build context from search results
-  const context = hits
-    .map((hit, idx) => {
-      const source = hit?._source ?? {};
-      const title = source.title ?? 'Untitled';
-      const content = (source.content ?? '').slice(0, 1500);
-      return `[${idx + 1}] ${title}\n${content}`;
-    })
-    .join('\n\n---\n\n');
+  // Build focused context from chunked docs, respecting total budget
+  const snippets: string[] = [];
+  let used = 0;
+  const perSnippet = 800;
+  for (let i = 0; i < hits.length; i++) {
+    const source = hits[i]?._source ?? {};
+    const title = source.title ?? 'Untitled';
+    const content: string = source.content ?? '';
+    const snippet = content.slice(0, perSnippet);
+    const block = `[${i + 1}] ${title}\n${snippet}`;
+    if (used + block.length > MAX_CONTEXT_CHARS) break;
+    snippets.push(block);
+    used += block.length + 8; // separators allowance
+  }
+  const context = snippets.join('\n\n---\n\n');
 
   const response = await fetchFn('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -200,7 +223,7 @@ async function generateAnswerWithOpenAI(
       messages: [
         {
           role: 'system',
-          content: `Add in text citations like [1], [2], [3], etc. throughout your answer to reference specific sources from the provided context. Be as sepecific as possible.`
+          content: `Use short direct quotes from the provided context and add bracket citations like [1], [2] tied to those quotes. Only cite sources from the context. If the context is insufficient, say you don't know.`
         },
         {
           role: 'user',
@@ -224,11 +247,13 @@ async function generateAnswerWithOpenAI(
 function formatCitations(hits: any[]): Citation[] {
   return hits.map((hit, idx) => {
     const source = hit?._source ?? {};
+    const snippet: string | undefined = (source.content ?? '').slice(0, 140) || undefined;
     return {
       id: String(idx + 1),
       title: source.title ?? 'Untitled',
-      url: source.url ?? undefined
-    };
+      url: source.url ?? undefined,
+      snippet
+    } as any;
   });
 }
 
