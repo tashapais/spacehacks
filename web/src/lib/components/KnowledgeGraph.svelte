@@ -7,7 +7,8 @@
 		forceManyBody,
 		forceCenter,
 		type SimulationNodeDatum,
-		type SimulationLinkDatum
+		type SimulationLinkDatum,
+		type Simulation
 	} from 'd3-force';
 	import { interpolateRainbow } from 'd3-scale-chromatic';
 	import { zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
@@ -24,10 +25,17 @@
 		similarity: number;
 	}
 
+	interface ClusterInfo {
+		id: number;
+		label: string;
+		count: number;
+	}
+
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let nodes = $state<GraphNode[]>([]);
 	let links = $state<GraphLink[]>([]);
+	let clusterInfo = $state<ClusterInfo[]>([]);
 
 	let width = $state(1200);
 	let height = $state(800);
@@ -35,6 +43,7 @@
 
 	let svgElement = $state<SVGSVGElement | undefined>(undefined);
 	let transform = $state({ x: 0, y: 0, k: 1 });
+	let simulation: Simulation<GraphNode, GraphLink> | null = null;
 
 	async function fetchGraphData() {
 		try {
@@ -46,6 +55,7 @@
 			const data = await response.json();
 			nodes = data.nodes;
 			links = data.links;
+			clusterInfo = data.clusterInfo || [];
 			runSimulation();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Unknown error';
@@ -55,20 +65,25 @@
 	}
 
 	function runSimulation() {
-		const simulation = forceSimulation<GraphNode>(nodes)
+		// Stop existing simulation
+		if (simulation) {
+			simulation.stop();
+		}
+
+		simulation = forceSimulation<GraphNode>(nodes)
 			.force(
 				'link',
 				forceLink<GraphNode, GraphLink>(links)
 					.id((d) => d.id)
-					.distance(100) // Longer links to spread clusters apart
-					.strength((d) => d.similarity * 0.5) // Stronger link force
+					.distance(100)
+					.strength((d) => d.similarity * 0.5)
 			)
-			.force('charge', forceManyBody().strength(-500)) // Much stronger repulsion
-			.force('collide', forceCollide().radius(12)) // Larger collision radius
+			.force('charge', forceManyBody().strength(-500))
+			.force('collide', forceCollide().radius(12))
 			.force('center', forceCenter(width / 2, height / 2));
 
 		// Run simulation synchronously to get final positions
-		for (let i = 0; i < 500; ++i) simulation.tick(); // More iterations for settling
+		for (let i = 0; i < 500; ++i) simulation.tick();
 
 		// Update nodes with positions
 		nodes = simulation.nodes();
@@ -215,6 +230,18 @@
 					{/if}
 				</div>
 			{/if}
+
+			<!-- Legend -->
+			<div class="legend">
+				<div class="legend-title">Clusters</div>
+				{#each clusterInfo as cluster}
+					<div class="legend-item">
+						<div class="legend-color" style="background-color: {getNodeColor(cluster.id)}"></div>
+						<div class="legend-label">{cluster.label}</div>
+						<div class="legend-count">({cluster.count})</div>
+					</div>
+				{/each}
+			</div>
 		</div>
 
 		<div class="graph-info">
@@ -298,5 +325,60 @@
 		font-size: 0.75rem;
 		color: #666;
 		text-align: center;
+	}
+
+	.legend {
+		position: absolute;
+		top: 16px;
+		right: 16px;
+		background: rgba(255, 255, 255, 0.95);
+		border: 1px solid #e0e0e0;
+		border-radius: 8px;
+		padding: 12px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+		font-size: 0.85rem;
+		max-width: 200px;
+		z-index: 10;
+	}
+
+	.legend-title {
+		font-weight: 600;
+		margin-bottom: 8px;
+		color: #333;
+		font-size: 0.9rem;
+	}
+
+	.legend-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 6px;
+	}
+
+	.legend-item:last-child {
+		margin-bottom: 0;
+	}
+
+	.legend-color {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		flex-shrink: 0;
+		border: 1px solid rgba(0, 0, 0, 0.1);
+	}
+
+	.legend-label {
+		flex: 1;
+		font-size: 0.75rem;
+		color: #555;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.legend-count {
+		font-size: 0.7rem;
+		color: #999;
+		font-weight: 500;
 	}
 </style>

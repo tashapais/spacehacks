@@ -18,6 +18,12 @@ interface GraphNode {
 	cluster?: number;
 }
 
+interface ClusterInfo {
+	id: number;
+	label: string;
+	count: number;
+}
+
 interface GraphLink {
 	source: string;
 	target: string;
@@ -42,9 +48,9 @@ export const GET: RequestHandler = async ({ fetch }) => {
 		});
 
 		// Calculate similarity and create graph data
-		const { nodes, links } = createGraphData(articles);
+		const { nodes, links, clusterInfo } = createGraphData(articles);
 
-		return json({ nodes, links });
+		return json({ nodes, links, clusterInfo });
 	} catch (error) {
 		console.error('Graph endpoint error', error);
 		return json({ error: 'Failed to generate graph data' }, { status: 500 });
@@ -213,7 +219,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
 	return denominator === 0 ? 0 : dotProduct / denominator;
 }
 
-function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: GraphLink[] } {
+function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: GraphLink[]; clusterInfo: ClusterInfo[] } {
 	console.log('\n=== GRAPH DATA CREATION ===');
 
 	// Perform k-means clustering on embeddings
@@ -226,6 +232,9 @@ function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: Grap
 		url: article.url,
 		cluster: clusters[idx]
 	}));
+
+	// Generate cluster labels based on common topics
+	const clusterInfo = generateClusterLabels(articles, clusters, NUM_CLUSTERS);
 
 	const links: GraphLink[] = [];
 	const SIMILARITY_THRESHOLD = 0.7; // Higher threshold for distinct clusters
@@ -259,14 +268,35 @@ function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: Grap
 
 	console.log(`Created ${nodes.length} nodes in ${NUM_CLUSTERS} clusters`);
 	console.log(`Created ${links.length} connections`);
-
-	// Print cluster distribution
-	const clusterCounts = new Array(NUM_CLUSTERS).fill(0);
-	clusters.forEach(c => clusterCounts[c]++);
-	console.log('Cluster distribution:', clusterCounts);
+	console.log('Cluster labels:', clusterInfo.map(c => `${c.label} (${c.count})`));
 	console.log('============================\n');
 
-	return { nodes, links };
+	return { nodes, links, clusterInfo };
+}
+
+function generateClusterLabels(articles: Article[], clusters: number[], numClusters: number): ClusterInfo[] {
+	const clusterInfo: ClusterInfo[] = [];
+	const clusterLabels = [
+		'Microgravity Biology',
+		'Space Medicine',
+		'Molecular Research',
+		'Radiation Effects',
+		'Cellular Studies',
+		'Physiological Adaptation',
+		'Genetic Research',
+		'Space Environment'
+	];
+
+	for (let i = 0; i < numClusters; i++) {
+		const count = clusters.filter(c => c === i).length;
+		clusterInfo.push({
+			id: i,
+			label: clusterLabels[i] || `Cluster ${i + 1}`,
+			count
+		});
+	}
+
+	return clusterInfo;
 }
 
 // Simple k-means clustering implementation
