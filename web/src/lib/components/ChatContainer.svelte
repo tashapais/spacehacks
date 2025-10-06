@@ -28,7 +28,7 @@
 		{
 			id: makeId('assistant'),
 			role: 'assistant',
-			text: 'Welcome to the NASA Bio Studies AI assistant! Ask me about space biology discoveries.'
+			text: 'Welcome to SPOK the NASA Bio Studies AI assistant! Use the drop down to select your expertise level, then ask me about space biology discoveries. See the top 5 most relevant sources highlighted as gold nodes in the knowledge web above.'
 		}
 	];
 
