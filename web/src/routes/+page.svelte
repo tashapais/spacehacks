@@ -19,10 +19,12 @@
 	</header>
 
 	<!-- Knowledge Graph -->
-	<div class="h-[600px] border-b">
+	<div class="h-[500px] flex-shrink-0 border-b">
 		<KnowledgeGraph />
 	</div>
 
 	<!-- Main Chat Content -->
-	<ChatContainer />
+	<div class="flex-1 min-h-0">
+		<ChatContainer />
+	</div>
 </main>
