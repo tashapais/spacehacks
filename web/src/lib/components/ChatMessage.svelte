@@ -62,7 +62,7 @@
                 {/if}
               </div>
               {#if citation.snippet}
-                <div class="mt-0.5 text-[11px] text-gray-500 line-clamp-2">“{citation.snippet}”</div>
+                <div class="mt-0.5 text-[11px] text-gray-500 line-clamp-3">“{citation.snippet}”</div>
               {/if}
             </li>
           {/each}

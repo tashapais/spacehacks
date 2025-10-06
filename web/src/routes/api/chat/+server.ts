@@ -5,7 +5,7 @@ import { Buffer } from 'node:buffer';
 
 const DEFAULT_TOP_K = 4;
 const DEFAULT_NUM_CANDIDATES = 50;
-const MAX_CONTEXT_CHARS = 2800;
+const MAX_CONTEXT_CHARS = 3600;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -68,10 +68,17 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
     const hits = dedupeByArticle(rawHits, DEFAULT_TOP_K);
     const citations = formatCitations(hits);
 
-    const answer = await generateAnswerWithOpenAI(fetch, {
+    let answer = await generateAnswerWithOpenAI(fetch, {
       apiKey: OPENAI_API_KEY,
       question,
       hits
+    });
+
+    // Clamp bracket citations to valid range [1..hits.length]
+    answer = answer.replace(/\[(\d+)\]/g, (match, num) => {
+      const n = parseInt(num, 10);
+      if (n >= 1 && n <= hits.length) return `[${n}]`;
+      return ''; // Remove invalid citations
     });
 
     return json({ answer, citations });
@@ -120,15 +127,18 @@ async function embedQuery(
 }
 
 function dedupeByArticle(hits: any[], limit: number) {
-  const seen = new Set<string>();
-  const out: any[] = [];
+  const byArticle: Record<string, any[]> = {};
   for (const h of hits) {
     const a = h?._source?.article_id as string | undefined;
     const key = a || Math.random().toString();
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(h);
-    }
+    if (!byArticle[key]) byArticle[key] = [];
+    byArticle[key].push(h);
+  }
+  const out: any[] = [];
+  for (const chunks of Object.values(byArticle)) {
+    // Select the chunk with highest _score (or first if no score)
+    chunks.sort((a, b) => (b._score || 0) - (a._score || 0));
+    out.push(chunks[0]);
     if (out.length >= limit) break;
   }
   return out;
@@ -166,6 +176,11 @@ async function knnRetrieve(
         num_candidates: numCandidates
       },
       _source: ['title', 'url', 'content', 'article_id', 'chunk_index', 'n_chars'],
+      highlight: {
+        fields: {
+          content: {}
+        }
+      },
       size: Math.max(k * 2, k)
     })
   });
@@ -199,7 +214,7 @@ async function generateAnswerWithOpenAI(
   // Build focused context from chunked docs, respecting total budget
   const snippets: string[] = [];
   let used = 0;
-  const perSnippet = 800;
+  const perSnippet = 1200;
   for (let i = 0; i < hits.length; i++) {
     const source = hits[i]?._source ?? {};
     const title = source.title ?? 'Untitled';
@@ -223,7 +238,7 @@ async function generateAnswerWithOpenAI(
       messages: [
         {
           role: 'system',
-          content: `Use short direct quotes from the provided context and add bracket citations like [1], [2] tied to those quotes. Only cite sources from the context. If the context is insufficient, say you don't know.`
+          content: `Provide detailed, comprehensive answers with full relevant quotes from the context. Cite each source with full sentences where possible. Only cite sources from the context. If the context is insufficient, say you don't know.`
         },
         {
           role: 'user',
@@ -231,7 +246,7 @@ async function generateAnswerWithOpenAI(
         }
       ],
       temperature: 0.7,
-      max_tokens: 800
+      max_tokens: 1200
     })
   });
 
@@ -247,7 +262,10 @@ async function generateAnswerWithOpenAI(
 function formatCitations(hits: any[]): Citation[] {
   return hits.map((hit, idx) => {
     const source = hit?._source ?? {};
-    const snippet: string | undefined = (source.content ?? '').slice(0, 140) || undefined;
+    const highlight = hit?.highlight?.content?.[0] || source.content || '';
+    // Extract full sentence containing the highlight
+    const fullContent = source.content || '';
+    const snippet = extractFullSentence(highlight, fullContent, 400);
     return {
       id: String(idx + 1),
       title: source.title ?? 'Untitled',
@@ -255,6 +273,31 @@ function formatCitations(hits: any[]): Citation[] {
       snippet
     } as any;
   });
+}
+
+function extractFullSentence(highlight: string, fullContent: string, maxLen: number): string | undefined {
+  if (!highlight || !fullContent) return undefined;
+  // Find the highlight in fullContent and expand to full sentence
+  const idx = fullContent.indexOf(highlight);
+  if (idx === -1) return highlight.slice(0, maxLen);
+  // Find sentence start (look back for . ! ?)
+  let start = idx;
+  for (let i = idx - 1; i >= 0 && start - i < 100; i--) {
+    if (['.', '!', '?'].includes(fullContent[i])) {
+      start = i + 1;
+      break;
+    }
+  }
+  // Find sentence end
+  let end = idx + highlight.length;
+  for (let i = end; i < fullContent.length && i - idx < 200; i++) {
+    if (['.', '!', '?'].includes(fullContent[i])) {
+      end = i + 1;
+      break;
+    }
+  }
+  const sentence = fullContent.slice(start, end).trim();
+  return sentence.length > maxLen ? sentence.slice(0, maxLen) + '…' : sentence;
 }
 
 function buildElasticAuthHeader(rawApiKey: string): string {
