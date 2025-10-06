@@ -18,6 +18,7 @@
 		id: string;
 		title: string;
 		url?: string;
+		authors?: string;
 		cluster?: number;
 	}
 
@@ -222,9 +223,15 @@
 			</svg>
 
 			<!-- Tooltip -->
-			{#if hoveredNode}
-				<div class="tooltip" style="left: {hoveredNode.x}px; top: {hoveredNode.y}px;">
+			{#if hoveredNode && hoveredNode.x !== undefined && hoveredNode.y !== undefined}
+				<div
+					class="tooltip"
+					style="left: {(hoveredNode.x * transform.k + transform.x)}px; top: {(hoveredNode.y * transform.k + transform.y)}px;"
+				>
 					<div class="tooltip-title">{hoveredNode.title}</div>
+					{#if hoveredNode.authors}
+						<div class="tooltip-authors">{hoveredNode.authors}</div>
+					{/if}
 					{#if hoveredNode.url}
 						<div class="tooltip-url">{hoveredNode.url}</div>
 					{/if}
@@ -312,6 +319,13 @@
 	.tooltip-title {
 		font-weight: 600;
 		margin-bottom: 4px;
+	}
+
+	.tooltip-authors {
+		font-size: 0.8rem;
+		color: #ddd;
+		margin-bottom: 4px;
+		font-style: italic;
 	}
 
 	.tooltip-url {

@@ -8,6 +8,7 @@ interface Article {
 	title: string;
 	content: string;
 	url?: string;
+	authors?: string;
 	embedding: number[];
 }
 
@@ -15,6 +16,7 @@ interface GraphNode {
 	id: string;
 	title: string;
 	url?: string;
+	authors?: string;
 	cluster?: number;
 }
 
@@ -94,7 +96,7 @@ async function fetchAllArticles(
 			},
 			body: JSON.stringify({
 				size: 603,
-				_source: ['title', 'url', 'content', 'timestamp'],
+				_source: ['title', 'url', 'content', 'timestamp', 'authors'],
 				fields: ['content_vector'], // Explicitly request dense_vector field
 				query: {
 					match_all: {}
@@ -162,6 +164,7 @@ async function fetchAllArticles(
 			title: hit._source?.title ?? 'Untitled',
 			content: hit._source?.content ?? '',
 			url: hit._source?.url,
+			authors: hit._source?.authors,
 			embedding
 		};
 	});
@@ -230,6 +233,7 @@ function createGraphData(articles: Article[]): { nodes: GraphNode[]; links: Grap
 		id: article.id,
 		title: article.title,
 		url: article.url,
+		authors: article.authors,
 		cluster: clusters[idx]
 	}));
 
