@@ -1,6 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { Buffer } from 'node:buffer';
+import { EXPERTISE_CONFIGS, DEFAULT_EXPERTISE, type ExpertiseLevel } from '$lib/expertise';
 
 const DEFAULT_TOP_K = 4;
 const DEFAULT_NUM_CANDIDATES = 50;
@@ -44,7 +45,10 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 		});
 	}
 
-	const { messages }: { messages: ChatMessage[] } = await request.json();
+	const { messages, expertise }: { messages: ChatMessage[]; expertise?: ExpertiseLevel } =
+		await request.json();
+	const expertiseLevel = expertise || DEFAULT_EXPERTISE;
+	const expertiseConfig = EXPERTISE_CONFIGS[expertiseLevel];
 	if (!messages?.length) {
 		return new Response(JSON.stringify({ error: 'No messages provided' }), {
 			status: 400,
@@ -101,7 +105,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 						)
 					);
 
-					// Stream OpenAI response
+					// Stream OpenAI response with expertise-specific parameters
 					const response = await fetch('https://api.openai.com/v1/chat/completions', {
 						method: 'POST',
 						headers: {
@@ -113,7 +117,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 							messages: [
 								{
 									role: 'system',
-									content: `Provide detailed, comprehensive answers with full relevant quotes from the context. Cite each source with full sentences where possible. Only cite sources from the context. If the context is insufficient, say you don't know.`
+									content: expertiseConfig.systemPrompt
 								},
 								{
 									role: 'user',
@@ -121,8 +125,8 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 								}
 							],
 							stream: true,
-							temperature: 0.7,
-							max_tokens: 1200
+							temperature: expertiseConfig.temperature,
+							max_tokens: expertiseConfig.maxTokens
 						})
 					});
 
@@ -154,7 +158,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 										// Clamp bracket citations to valid range [1..hits.length]
 										const clampedContent = content.replace(
 											/\[(\d+)\]/g,
-											(match: string, num: string) => {
+											(_match: string, num: string) => {
 												const n = parseInt(num, 10);
 												if (n >= 1 && n <= hits.length) return `[${n}]`;
 												return ''; // Remove invalid citations
@@ -343,71 +347,6 @@ function buildContext(hits: any[]): string {
 		used += block.length + 8; // separators allowance
 	}
 	return snippets.join('\n\n---\n\n');
-}
-
-async function generateAnswerWithOpenAI(
-	fetchFn: typeof fetch,
-	{
-		apiKey,
-		question,
-		hits
-	}: {
-		apiKey: string;
-		question: string;
-		hits: any[];
-	}
-): Promise<string> {
-	if (hits.length === 0) {
-		return `I couldn't find any relevant information in the knowledge base to answer your question: "${question}"`;
-	}
-
-	// Build context from search results
-	// Build focused context from chunked docs, respecting total budget
-	const snippets: string[] = [];
-	let used = 0;
-	const perSnippet = 1200;
-	for (let i = 0; i < hits.length; i++) {
-		const source = hits[i]?._source ?? {};
-		const title = source.title ?? 'Untitled';
-		const content: string = source.content ?? '';
-		const snippet = content.slice(0, perSnippet);
-		const block = `[${i + 1}] ${title}\n${snippet}`;
-		if (used + block.length > MAX_CONTEXT_CHARS) break;
-		snippets.push(block);
-		used += block.length + 8; // separators allowance
-	}
-	const context = snippets.join('\n\n---\n\n');
-
-	const response = await fetchFn('https://api.openai.com/v1/chat/completions', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${apiKey}`
-		},
-		body: JSON.stringify({
-			model: 'gpt-4o-mini',
-			messages: [
-				{
-					role: 'system',
-					content: `Provide detailed, comprehensive answers with full relevant quotes from the context. Cite each source with full sentences where possible. Only cite sources from the context. If the context is insufficient, say you don't know.`
-				},
-				{
-					role: 'user',
-					content: `Question: ${question}\n\nContext:\n${context}`
-				}
-			],
-			temperature: 0.7,
-			max_tokens: 1200
-		})
-	});
-
-	if (!response.ok) {
-		const details = await response.text();
-		throw new Error(`OpenAI request failed: ${response.status} ${details}`);
-	}
-
-	const data = await response.json();
-	return data.choices?.[0]?.message?.content ?? 'Unable to generate answer';
 }
 
 function formatCitations(hits: any[]): Citation[] {
