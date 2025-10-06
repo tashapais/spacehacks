@@ -1,4 +1,5 @@
 # Spacehacks RAG Pipeline
+Project overview: https://www.canva.com/design/DAG03RClQs0/IisGjn7Af_J681ci4SG7aA/edit?utm_content=DAG03RClQs0&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton
 
 This repository ingests 608 publicly available NASA/space biology links from `SB_publication_PMC.csv`, stores chunked content in Amazon OpenSearch Service / Elastic Cloud, and enables retrieval augmented generation (RAG) answers with inline citations.
 
