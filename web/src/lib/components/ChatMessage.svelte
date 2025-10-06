@@ -5,6 +5,7 @@
     id: string;
     title: string;
     url?: string;
+    snippet?: string;
   };
 
   export let message: {
@@ -48,15 +49,20 @@
         <ul class="space-y-1">
           {#each message.citations as citation}
             <li>
-              <span>[{citation.id}] {citation.title}</span>
-              {#if citation.url}
-                <a
-                  class="ml-2 text-blue-600 hover:underline"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                  href={citation.url}
-                  >Open</a
-                >
+              <div>
+                <span>[{citation.id}] {citation.title}</span>
+                {#if citation.url}
+                  <a
+                    class="ml-2 text-blue-600 hover:underline"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                    href={citation.url}
+                    >Open</a
+                  >
+                {/if}
+              </div>
+              {#if citation.snippet}
+                <div class="mt-0.5 text-[11px] text-gray-500 line-clamp-2">“{citation.snippet}”</div>
               {/if}
             </li>
           {/each}
