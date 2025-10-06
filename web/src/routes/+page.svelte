@@ -19,7 +19,7 @@
 	</header>
 
 	<!-- Knowledge Graph -->
-	<div class="h-[400px] border-b">
+	<div class="h-[600px] border-b">
 		<KnowledgeGraph />
 	</div>
 

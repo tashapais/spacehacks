@@ -150,6 +150,12 @@
 		hoveredNode = node;
 	}
 
+	function handleNodeClick(node: GraphNode) {
+		if (node.url) {
+			window.open(node.url, '_blank');
+		}
+	}
+
 	onMount(() => {
 		fetchGraphData();
 
@@ -215,6 +221,7 @@
 								opacity={hoveredNode && hoveredNode.id !== node.id ? 0.3 : 1}
 								onmouseenter={() => handleNodeHover(node)}
 								onmouseleave={() => handleNodeHover(null)}
+								onclick={() => handleNodeClick(node)}
 								class="node-circle"
 							/>
 						{/each}
